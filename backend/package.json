@@ -1,5 +1,5 @@
 {
-  "name": "spur-chat-backend",
+  "name": "marqet-ai-chat-backend",
   "version": "1.0.0",
   "description": "Spur AI Live Chat – backend API",
   "main": "dist/server.js",

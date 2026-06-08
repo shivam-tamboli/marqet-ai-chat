@@ -261,7 +261,7 @@ The customer's actual orders are pre-fetched once per turn and serialised into c
 ## 11. Folder Structure
 
 ```
-spur-chat/
+marqet-ai-chat/
 ├── ARCHITECTURE.md
 ├── README.md
 │

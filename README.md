@@ -1,9 +1,9 @@
 # Marqet AI Chat
 
-A customer support chat widget for Marqet — a fictional Indian e-commerce marketplace. The AI agent knows Marqet's product catalog and policies through a RAG pipeline, tracks live order status via Supabase Realtime, and keeps separate conversation histories for each of five demo customers.
+A customer support chat widget for Marqet, a fictional Indian e-commerce marketplace. The AI agent knows Marqet's product catalog and policies through a RAG pipeline, tracks live order status via Supabase Realtime, and keeps separate conversation histories for each of five demo customers.
 
-**Live demo:** [https://spur-ai-chat-five.vercel.app](https://spur-ai-chat-five.vercel.app)  
-**Backend API:** [https://spur-ai-chat-vmie.onrender.com](https://spur-ai-chat-vmie.onrender.com) — health check: [`/health`](https://spur-ai-chat-vmie.onrender.com/health)
+**Live demo:** [https://marqet-ai-chat.vercel.app](https://marqet-ai-chat.vercel.app)  
+**Backend API:** [https://marqet-ai-chat.onrender.com](https://marqet-ai-chat.onrender.com) — health check: [`/health`](https://marqet-ai-chat.onrender.com/health)
 
 ---
 
@@ -18,7 +18,7 @@ A customer support chat widget for Marqet — a fictional Indian e-commerce mark
 - Supports multiple independent chat sessions per customer — switch between them, delete old ones, history survives reload
 - Recognises natural order queries like "my orders", "what did I buy", and "show my purchases"
 - Lets you browse as any of 5 demo customers (Priya, Arjun, Sneha, Divya, Karan); the AI knows who it's talking to and won't leak another customer's data
-- Blocks identity spoofing — if someone types "my name is Priya" mid-session as a different customer, the AI rejects the claim
+- Blocks identity spoofing: if someone types "my name is Priya" mid-session as a different customer, the AI rejects the claim
 - Prevents hallucinated orders by injecting the customer's actual order list into every prompt
 
 ---
@@ -47,8 +47,8 @@ A customer support chat widget for Marqet — a fictional Indian e-commerce mark
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/shivam-tamboli/spur-ai-chat.git
-cd spur-ai-chat
+git clone https://github.com/shivam-tamboli/marqet-ai-chat.git
+cd marqet-ai-chat
 
 cd backend && npm install
 cd ../frontend && npm install
@@ -80,7 +80,7 @@ VITE_SUPABASE_ANON_KEY=eyJ...
 
 ### 3. Run Supabase migrations
 
-Run these in order from your Supabase dashboard → SQL editor (or `supabase db push`):
+Run these in order from your Supabase dashboard -> SQL editor (or `supabase db push`):
 
 ```
 001_init.sql
@@ -107,7 +107,7 @@ Run these in order from your Supabase dashboard → SQL editor (or `supabase db 
 cd backend && npm run dev
 ```
 
-First run seeds the database automatically — 38 FAQ chunks with embeddings and 7 mock orders (MQ-1001 through MQ-1007). Both steps are skipped if the data already exists.
+First run seeds the database automatically: 38 FAQ chunks with embeddings and 7 mock orders (MQ-1001 through MQ-1007). Both steps are skipped if the data already exists.
 
 ```bash
 # To re-seed manually:
@@ -143,7 +143,7 @@ Send a message and get a reply.
 **Response:**
 ```json
 {
-  "reply": "Sure, Priya! Here are your current orders:\n\n1. **MQ-1001** — Nike Air Force 1 (size 8) — Packed\n2. **MQ-1005** — Apple AirPods Pro (2nd gen) — Shipped (3–5 business days)",
+  "reply": "Sure, Priya! Here are your current orders:\n\n1. **MQ-1001** - Nike Air Force 1 (size 8) - Packed\n2. **MQ-1005** - Apple AirPods Pro (2nd gen) - Shipped (3-5 business days)",
   "sessionId": "29080d20-e8f5-41c1-a291-12d5428e7a52",
   "card_payloads": [
     {
@@ -193,7 +193,7 @@ Fetch the full message history for a session.
     "id": "fea10c28-5bc9-4d4e-87a7-b7103bf814e9",
     "conversation_id": "29080d20-e8f5-41c1-a291-12d5428e7a52",
     "sender": "ai",
-    "text": "Sure, Priya! Here are your current orders:\n\n1. **Order ID:** MQ-1001\n   - **Status:** Packed\n   - **Item:** Nike Air Force 1 (size 8)\n\n2. **Order ID:** MQ-1005\n   - **Status:** Shipped\n   - **Item:** Apple AirPods Pro (2nd gen)\n   - **Estimated Delivery:** 3–5 business days",
+    "text": "Sure, Priya! Here are your current orders:\n\n1. **Order ID:** MQ-1001\n   - **Status:** Packed\n   - **Item:** Nike Air Force 1 (size 8)\n\n2. **Order ID:** MQ-1005\n   - **Status:** Shipped\n   - **Item:** Apple AirPods Pro (2nd gen)\n   - **Estimated Delivery:** 3-5 business days",
     "card_payload": {
       "type": "order",
       "order_number": "MQ-1001",
@@ -241,14 +241,14 @@ Look up a single order by number (e.g. `MQ-1001`).
 
 ### POST /orders/:orderNumber/advance
 
-Advance an order through its lifecycle: `Paid → Packed → Shipped → Delivered`. Triggers a Supabase Realtime event so any open order card updates immediately.
+Advance an order through its lifecycle: `Paid -> Packed -> Shipped -> Delivered`. Triggers a Supabase Realtime event so any open order card updates immediately.
 
 ```bash
 # Local (no auth needed)
 curl -X POST http://localhost:3001/orders/MQ-1001/advance
 
 # Production
-curl -X POST https://spur-ai-chat-vmie.onrender.com/orders/MQ-1001/advance \
+curl -X POST https://marqet-ai-chat.onrender.com/orders/MQ-1001/advance \
   -H "x-admin-key: YOUR_DEMO_ADMIN_KEY"
 ```
 
@@ -278,11 +278,11 @@ curl -X POST https://spur-ai-chat-vmie.onrender.com/orders/MQ-1001/advance \
 
 When you send a message, the backend runs three things in sequence before replying:
 
-1. **Order intent detection** — checks for `MQ-XXXX` patterns and natural phrases like "my orders". Each match hits the DB, runs a `customerOwns()` ownership check, and injects the result as tagged context (e.g. `ORDER_FOUND`, `MY_ORDERS_FOUND`, `ORDER_BELONGS_TO_OTHER`).
+1. **Order intent detection** checks for `MQ-XXXX` patterns and natural phrases like "my orders". Each match hits the DB, runs a `customerOwns()` ownership check, and injects the result as tagged context (e.g. `ORDER_FOUND`, `MY_ORDERS_FOUND`, `ORDER_BELONGS_TO_OTHER`).
 
-2. **RAG retrieval** — embeds the user message and pulls the top 3 matching FAQ chunks plus top 3 from the session's message history (cosine similarity via pgvector). These go into the system prompt alongside the order context.
+2. **RAG retrieval** embeds the user message and pulls the top 3 matching FAQ chunks plus top 3 from the session's message history (cosine similarity via pgvector). These go into the system prompt alongside the order context.
 
-3. **LLM completion** — `gpt-4o-mini` generates the reply with full context. Structured order cards are parsed out and returned alongside the text so the frontend can render them as interactive status cards.
+3. **LLM completion** sends everything to `gpt-4o-mini`. Structured order cards are parsed out and returned alongside the text so the frontend can render them as interactive status cards.
 
 Full detail in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
@@ -295,13 +295,13 @@ No login required. Each session is a UUID stored in localStorage, scoped per cus
 - Hit **+** in the header to start a fresh session (no DB row until the first message)
 - The session list icon shows all past sessions with a preview of the first message
 - Deleting a session cascades through messages and their embeddings on the backend
-- RAG memory is scoped to the active session — two conversations about different topics don't bleed into each other
+- RAG memory is scoped to the active session, so two conversations about different topics don't bleed into each other
 
 ---
 
 ## LLM setup
 
-- **Model:** `gpt-4o-mini` — good balance of speed and quality for support chat
+- **Model:** `gpt-4o-mini`, good balance of speed and quality for support chat
 - **Context:** last 20 messages + up to 6 RAG chunks (3 FAQ + 3 session history) per turn
 - **Embeddings:** `text-embedding-3-small` (1536 dims), stored async after each message
 - **Temperature:** 0.4, max 512 tokens per reply
@@ -327,9 +327,9 @@ No login required. Each session is a UUID stored in localStorage, scoped per cus
 
 A few things worth adding before this goes to real production:
 
-- **Auth** — right now sessions are device-local. Supabase Auth would tie them to real accounts.
-- **Streaming** — server-sent events so the reply appears word-by-word instead of all at once.
-- **Tool-calling** — replace the regex order detection with proper function calls so the LLM can trigger cancel/refund actions with a confirmation step.
-- **OpenTelemetry** — the structured logger is a good start, but proper traces would expose per-request latency breakdowns (RAG vs LLM vs DB) in a dashboard.
-- **RAG eval pipeline** — validate retrieval quality across three axes: *recall* (did the right FAQ chunks come back?), *correctness* (is the answer factually right against the source?), and *faithfulness* (did the LLM actually use what was retrieved, or did it hallucinate past it?). A fixed Q&A golden set run nightly would catch regressions whenever chunks are edited or the similarity threshold is tuned.
-- **Embedding job queue** — move fire-and-forget to a retryable queue so embedding failures don't silently degrade RAG recall.
+- **Auth** - right now sessions are device-local. Supabase Auth would tie them to real accounts.
+- **Streaming** - server-sent events so the reply appears word-by-word instead of all at once.
+- **Tool-calling** - replace the regex order detection with proper function calls so the LLM can trigger cancel/refund actions with a confirmation step.
+- **OpenTelemetry** - the structured logger is a good start, but proper traces would expose per-request latency breakdowns (RAG vs LLM vs DB) in a dashboard.
+- **RAG eval pipeline** - validate retrieval quality across three axes: *recall* (did the right FAQ chunks come back?), *correctness* (is the answer factually right against the source?), and *faithfulness* (did the LLM actually use what was retrieved, or did it hallucinate past it?). A fixed Q&A golden set run nightly would catch regressions whenever chunks are edited or the similarity threshold is tuned.
+- **Embedding job queue** - move fire-and-forget to a retryable queue so embedding failures don't silently degrade RAG recall.
