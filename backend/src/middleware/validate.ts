@@ -8,7 +8,7 @@ export const chatMessageSchema = z.object({
     .min(1, 'Message cannot be empty')
     .max(LIMITS.MSG_MAX_LEN, `Message must be ${LIMITS.MSG_MAX_LEN} characters or fewer`),
   sessionId: z.string().uuid('Invalid session ID format').optional(),
-  customerId: z.string().max(LIMITS.CUSTOMER_ID_MAX_LEN).optional(),    // preferred: slug, e.g. 'priya'
+  customerId: z.string().uuid('Invalid customer ID format').optional(),   // preferred: UUID from customers.id
   customerName: z.string().max(LIMITS.CUSTOMER_NAME_MAX_LEN).optional(), // legacy fallback — still accepted
 });
 

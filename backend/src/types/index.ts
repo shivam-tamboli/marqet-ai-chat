@@ -19,15 +19,14 @@ export class DBError extends Error {
 
 // Resolved customer record — set on req.activeCustomer by identity middleware.
 export interface ActiveCustomer {
-  id: string;    // DB UUID
-  slug: string;  // stable slug matching frontend customer.id, e.g. 'priya'
+  id: string;    // DB UUID — the canonical customer identifier
   name: string;  // display name for LLM context — never logged, never sent over the wire
 }
 
 export interface ChatMessageRequest {
   message: string;
   sessionId?: string;
-  customerId?: string;   // preferred: slug, e.g. 'priya'
+  customerId?: string;   // preferred: UUID from customers.id
   customerName?: string; // legacy fallback — still accepted, resolved server-side
 }
 

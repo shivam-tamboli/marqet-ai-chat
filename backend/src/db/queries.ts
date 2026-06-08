@@ -15,8 +15,26 @@ function dbError(op: string, err: unknown): never {
 
 // Module-level caches for the customers table.
 // Effectively static during server lifetime — 5 rows, never updated. No TTL needed.
+const customerIdCache = new Map<string, CustomerRow>();
 const customerNameCache = new Map<string, CustomerRow>();
-const customerSlugCache = new Map<string, CustomerRow>();
+
+export async function getCustomerById(id: string): Promise<CustomerRow | null> {
+  const key = id.toLowerCase().trim();
+  const cached = customerIdCache.get(key);
+  if (cached) return cached;
+  const { data, error } = await supabase
+    .from('customers')
+    .select()
+    .eq('id', id)
+    .maybeSingle();
+  if (error) dbError('getCustomerById', error);
+  if (data) {
+    const row = data as unknown as CustomerRow;
+    customerIdCache.set(key, row);
+    customerNameCache.set(row.name.toLowerCase().trim(), row);
+  }
+  return data as unknown as CustomerRow | null;
+}
 
 export async function getCustomerByName(name: string): Promise<CustomerRow | null> {
   const key = name.toLowerCase().trim();
@@ -31,25 +49,7 @@ export async function getCustomerByName(name: string): Promise<CustomerRow | nul
   if (data) {
     const row = data as unknown as CustomerRow;
     customerNameCache.set(key, row);
-    customerSlugCache.set(row.slug, row);
-  }
-  return data as unknown as CustomerRow | null;
-}
-
-export async function getCustomerBySlug(slug: string): Promise<CustomerRow | null> {
-  const key = slug.toLowerCase().trim();
-  const cached = customerSlugCache.get(key);
-  if (cached) return cached;
-  const { data, error } = await supabase
-    .from('customers')
-    .select()
-    .eq('slug', slug)
-    .maybeSingle();
-  if (error) dbError('getCustomerBySlug', error);
-  if (data) {
-    const row = data as unknown as CustomerRow;
-    customerSlugCache.set(key, row);
-    customerNameCache.set(row.name.toLowerCase().trim(), row);
+    customerIdCache.set(row.id, row);
   }
   return data as unknown as CustomerRow | null;
 }

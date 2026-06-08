@@ -8,13 +8,11 @@ export interface Database {
         Row: {
           id: string;
           name: string;
-          slug: string;         // added in migration 009; e.g. 'priya'
           created_at: string;
         };
         Insert: {
           id?: string;
           name: string;
-          slug: string;         // required after migration 009 (NOT NULL)
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['customers']['Insert']>;

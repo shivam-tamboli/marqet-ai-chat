@@ -92,6 +92,7 @@ backend/supabase/migrations/006_add_card_payloads_column.sql
 backend/supabase/migrations/007_add_customers_table.sql
 backend/supabase/migrations/008_embedding_not_null_and_indexes.sql
 backend/supabase/migrations/009_customer_slug.sql
+backend/supabase/migrations/010_remove_slug_use_uuid.sql
 ```
 
 > **Note:** Real-time order tracking requires `orders` to be in the Supabase Realtime publication. Verify with:
@@ -237,7 +238,7 @@ The widget supports multiple independent conversation sessions without requiring
 | Order card triggered by regex | Simple MQ-XXXX pattern detection; no extra LLM call needed |
 | `customerOwns()` privacy filter | All order lookups check ownership before injecting context — cross-customer data never reaches the LLM |
 | `ORDERS_FOR_CUSTOMER` grounding context | Pre-fetched once per turn and injected on every message so the LLM can reject impossible claims |
-| `customerId` slug over the wire (not `customerName`) | API sends `'priya'` not `'Priya Sharma'`; backend resolves slug → UUID + display name. PII stays server-side; name never traverses the network. Legacy `customerName` still accepted. |
+| `customerId` UUID over the wire (not `customerName`) | API sends the DB UUID directly; backend looks up the display name server-side. PII stays server-side; name never traverses the network. Legacy `customerName` still accepted. |
 | ivfflat indexes (lists=50) | Suitable for the FAQ chunk count (~38); upgrade to hnsw at scale |
 
 ---
@@ -247,7 +248,7 @@ The widget supports multiple independent conversation sessions without requiring
 - **Rate limiting:** `express-rate-limit` middleware is enabled per-IP (100 req / 15 min) protecting both the LLM and DB from abuse.
 - **Structured logging:** `lib/logger.ts` emits JSON in production and tagged strings in dev; every request gets an 8-char trace ID attached through all pipeline log lines.
 - **Request-scoped tracing:** each stage of a chat request (identity resolve → order prefetch → RAG → LLM → embedding store) is logged with the same request ID for easy correlation.
-- **Test suite:** 59 tests across 4 suites — `ownership`, `customerIdentity`, `systemPrompt`, and `identityFlow` — cover the highest-risk surfaces: cross-customer data leakage, identity hijacking, escalation contact injection, and slug-era API contract invariants.
+- **Test suite:** tests across 4 suites — `ownership`, `customerIdentity`, `systemPrompt`, and `identityFlow` — cover the highest-risk surfaces: cross-customer data leakage, identity hijacking, escalation contact injection, and UUID-based ownership invariants.
 
 ## Future Scope
 

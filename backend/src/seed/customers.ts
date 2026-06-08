@@ -1,14 +1,14 @@
 import 'dotenv/config';
 import { supabase } from '../db/supabase';
 
-// The 5 demo customers mirror frontend/src/data/customers.ts.
-// slug = frontend customer.id; must stay in sync with that file.
+// UUIDs must match what is already in the database (or will be inserted).
+// The frontend CUSTOMERS array uses these same IDs.
 const DEMO_CUSTOMERS = [
-  { name: 'Priya Sharma', slug: 'priya' },
-  { name: 'Arjun Nair',   slug: 'arjun' },
-  { name: 'Sneha Patel',  slug: 'sneha' },
-  { name: 'Divya Reddy',  slug: 'divya' },
-  { name: 'Karan Singh',  slug: 'karan' },
+  { id: '8768f042-f13b-43bb-8d9d-01843a520a2d', name: 'Priya Sharma' },
+  { id: '16b7fe8a-d751-412c-a18d-a8b3abe62299', name: 'Arjun Nair'   },
+  { id: '7d6b57b3-b4c9-4b68-99da-2ded7ebb0fd3', name: 'Sneha Patel'  },
+  { id: '5301c208-6761-4244-a655-ec48feab2733', name: 'Divya Reddy'  },
+  { id: 'ebc2cf6b-f54d-4a30-b84e-8d561766bb70', name: 'Karan Singh'  },
 ];
 
 export async function seedCustomers(): Promise<void> {
@@ -26,8 +26,8 @@ export async function seedCustomers(): Promise<void> {
   const { error } = await supabase
     .from('customers')
     .upsert(
-      DEMO_CUSTOMERS.map((c) => ({ name: c.name, slug: c.slug })),
-      { onConflict: 'name', ignoreDuplicates: true }
+      DEMO_CUSTOMERS.map((c) => ({ id: c.id, name: c.name })),
+      { onConflict: 'id', ignoreDuplicates: true }
     );
   if (error) throw error;
 

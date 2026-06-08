@@ -1,10 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { getCustomerBySlug, getCustomerByName } from '../db/queries';
+import { getCustomerById, getCustomerByName } from '../db/queries';
 
 // Resolves the active customer from the request and sets req.activeCustomer.
 //
 // Resolution order:
-//   1. customerId slug in body or x-customer-id header (new contract)
+//   1. customerId UUID in body or x-customer-id header (new contract)
 //   2. customerName string in body or x-customer-name header (legacy fallback)
 //
 // The resolved name is used server-side for LLM context only — it never
@@ -15,20 +15,20 @@ export async function resolveCustomerIdentity(
   next: NextFunction
 ): Promise<void> {
   try {
-    // Priority 1: slug-based (e.g. 'priya')
-    const slugHeader = req.headers['x-customer-id'];
-    const slugBody = req.body?.customerId;
-    const slug =
-      typeof slugHeader === 'string' && slugHeader.trim()
-        ? slugHeader.trim()
-        : typeof slugBody === 'string' && slugBody.trim()
-        ? slugBody.trim()
+    // Priority 1: UUID-based (e.g. '8768f042-f13b-43bb-8d9d-01843a520a2d')
+    const idHeader = req.headers['x-customer-id'];
+    const idBody = req.body?.customerId;
+    const customerId =
+      typeof idHeader === 'string' && idHeader.trim()
+        ? idHeader.trim()
+        : typeof idBody === 'string' && idBody.trim()
+        ? idBody.trim()
         : null;
 
-    if (slug) {
-      const customer = await getCustomerBySlug(slug).catch(() => null);
+    if (customerId) {
+      const customer = await getCustomerById(customerId).catch(() => null);
       if (customer) {
-        req.activeCustomer = { id: customer.id, slug: customer.slug, name: customer.name };
+        req.activeCustomer = { id: customer.id, name: customer.name };
         next();
         return;
       }
@@ -47,7 +47,7 @@ export async function resolveCustomerIdentity(
     if (name) {
       const customer = await getCustomerByName(name).catch(() => null);
       if (customer) {
-        req.activeCustomer = { id: customer.id, slug: customer.slug, name: customer.name };
+        req.activeCustomer = { id: customer.id, name: customer.name };
       }
     }
 

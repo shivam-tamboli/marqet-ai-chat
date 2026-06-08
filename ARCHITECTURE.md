@@ -59,7 +59,7 @@ App.tsx
 
 | Module | Responsibility |
 |---|---|
-| `chatStore` | messages, sessions, delete session, sends customerId (slug) per turn |
+| `chatStore` | messages, sessions, delete session, sends customerId (UUID) per turn |
 | `customerStore` | active customer, persisted as `marqet_active_customer` |
 | `uiStore` | `isWidgetOpen` toggle |
 | `api/chat.ts` | typed fetch wrapper for all backend endpoints |
@@ -72,7 +72,7 @@ App.tsx
 ```
 Middleware
 ├── requestLogger.ts — attaches 8-char request ID; logs all pipeline stages as [req:xxx stage]
-├── identity.ts      — async slug resolver: customerId body/header → full CustomerRow on req
+├── identity.ts      — async UUID resolver: customerId body/header → full CustomerRow on req
 ├── validate.ts      — Zod input validation (message, customerId, customerName, orderNumber)
 ├── adminAuth.ts     — DEMO_ADMIN_KEY guard on POST /orders/:num/advance
 ├── errorHandler.ts  — global error formatter (LLMError → 502, DBError → 503)
@@ -105,7 +105,7 @@ Data Layer
 | `orders` | `id` (PK uuid), `order_number` (user-facing, e.g. MQ-1001), `status`, `customer_name`, `customer_id` (FK → customers), `items` jsonb, `updated_at` |
 | `faq_chunks` | `id` (PK uuid), `content`, `embedding` vector(1536), `metadata` jsonb |
 | `message_embeddings` | `id` (PK uuid), `message_id` (FK), `embedding` vector(1536) |
-| `customers` | `id` (PK uuid), `name` (unique), `created_at` |
+| `customers` | `id` (PK uuid), `name`, `created_at` |
 
 **Relationships:**
 - `customers` → `orders` (one-to-many via `customer_id`)
@@ -127,7 +127,6 @@ erDiagram
     customers {
         uuid id
         text name
-        text slug
     }
     conversations {
         uuid id
@@ -161,7 +160,7 @@ erDiagram
 
 ## 6. Data Flow: Send Message + RAG
 
-1. User types a message → frontend validates → `POST /chat/message { message, sessionId, customerId }` (slug e.g. `'priya'`; backend resolves to full name server-side)
+1. User types a message → frontend validates → `POST /chat/message { message, sessionId, customerId }` (UUID from `customers.id`; backend resolves to full name server-side)
 2. Backend resolves or creates conversation row
 3. User message saved to DB; embedding stored async (fire-and-forget)
 4. Customer's full order list pre-fetched once (`ORDERS_FOR_CUSTOMER` grounding context built)
@@ -270,7 +269,7 @@ spur-chat/
 │   ├── src/
 │   │   ├── __tests__/
 │   │   │   ├── customerIdentity.test.ts  ← name-based ownership + detectIdentityClaim + ORDER_RE (20 tests)
-│   │   │   ├── identityFlow.test.ts      ← slug invariant, ACTIVE_CUSTOMER context, UUID regression (17 tests)
+│   │   │   ├── identityFlow.test.ts      ← ACTIVE_CUSTOMER context, UUID ownership regression
 │   │   │   ├── ownership.test.ts         ← UUID ownership, name fallback, partial UUID (12 tests)
 │   │   │   └── systemPrompt.test.ts      ← escalation contact + structural invariants (10 tests)
 │   │   ├── types/
@@ -297,9 +296,9 @@ spur-chat/
 │   │   ├── middleware/
 │   │   │   ├── adminAuth.ts          ← DEMO_ADMIN_KEY guard on /orders/:num/advance
 │   │   │   ├── errorHandler.ts       ← global error formatter (LLMError → 502, DBError → 503)
-│   │   │   ├── identity.ts           ← async slug resolver: body/header customerId → req.activeCustomer
+│   │   │   ├── identity.ts           ← async UUID resolver: body/header customerId → req.activeCustomer
 │   │   │   ├── requestLogger.ts      ← attaches [req:xxxxxxxx] trace ID to all pipeline log lines
-│   │   │   └── validate.ts           ← Zod input validation (message, customerId, customerName)
+│   │   │   └── validate.ts           ← Zod input validation (message, customerId UUID, customerName)
 │   │   ├── prompts/
 │   │   │   └── system.ts             ← system prompt + RAG injector + escalation contact
 │   │   ├── seed/
@@ -319,7 +318,8 @@ spur-chat/
 │   │       ├── 006_add_card_payloads_column.sql
 │   │       ├── 007_add_customers_table.sql           ← customers table + FK backfill
 │   │       ├── 008_embedding_not_null_and_indexes.sql ← NOT NULL on embeddings + indexes
-│   │       └── 009_customer_slug.sql                 ← slug column (lower first name) + unique index
+│   │       ├── 009_customer_slug.sql                 ← slug column (lower first name) + unique index
+│   │       └── 010_remove_slug_use_uuid.sql          ← drop slug column; drop unique constraint on name
 │   ├── .env.example
 │   ├── package.json
 │   └── tsconfig.json
@@ -375,7 +375,7 @@ spur-chat/
 | LLM | OpenAI gpt-4o-mini | Fast, cheap, strong instruction-following |
 | Realtime | Supabase Realtime | WebSocket pub/sub built into the existing DB service, zero extra infra |
 | Rate limiting | express-rate-limit (per-IP) | 100 req / 15 min protects LLM and DB from abuse; applied globally in app.ts |
-| Tests | Jest (59 tests, 4 suites) | Covers ownership checks, customer identity detection, system prompt invariants, and slug-era API contract |
+| Tests | Jest (4 suites) | Covers ownership checks, customer identity detection, system prompt invariants, and UUID-based ownership |
 | Deployment | Render (backend) + Vercel (frontend) | Free tier, env var support, auto-deploy from GitHub |
 
 ---
@@ -390,7 +390,7 @@ spur-chat/
 | Order tracking | Mock Supabase orders + Realtime | Demonstrates real-time without needing any external payment API |
 | Card payload | `card_payload` + `card_payloads` on messages | `card_payload` for lightweight single-card queries; `card_payloads` for full multi-card restore |
 | Session identity | UUID in localStorage | No auth required per assignment; survives page refresh |
-| Per-customer localStorage keys | `marqet_sessions_<id>` / `marqet_active_session_<id>` | Each of 5 demo customers gets isolated session storage without auth |
+| Per-customer localStorage keys | `marqet_sessions_<uuid>` / `marqet_active_session_<uuid>` | Each of 5 demo customers gets isolated session storage without auth; keyed by UUID |
 | LLM context cap | Last 20 messages passed in | Keeps token cost controlled; documented assumption |
 | RAG context cap | Top-3 chunks from each store | 6 chunks max per prompt; balances context richness vs. token cost |
 | Message embedding | Stored async after reply | Does not block the response; fire-and-forget for future RAG recall |
@@ -430,7 +430,7 @@ Users maintain multiple independent conversation sessions without auth. Sessions
 |---|---|
 | `marqet_sessions_<customerId>` | `SessionMeta[]` — `{ id, firstMessage, createdAt, updatedAt }` |
 | `marqet_active_session_<customerId>` | UUID of the currently active session for that customer |
-| `marqet_active_customer` | Customer ID string (e.g. `'priya'`) — defaults to Priya Sharma |
+| `marqet_active_customer` | Customer UUID (e.g. `'8768f042-f13b-43bb-8d9d-01843a520a2d'`) — defaults to Priya Sharma |
 | `marqet_bubble_corner` | `'tl' \| 'tr' \| 'bl' \| 'br'` — last snapped corner for floating bubble |
 
 **Session lifecycle:**
