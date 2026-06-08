@@ -70,7 +70,9 @@ export async function handleChatMessage(
   let conversationId: string;
   if (sessionId) {
     const existing = await getConversation(sessionId);
-    conversationId = existing ? existing.id : (await createConversation(customerId ?? undefined)).id;
+    // Re-use the client's sessionId as the conversation ID so the frontend's
+    // stored reference stays valid even after a DB reset.
+    conversationId = existing ? existing.id : (await createConversation(customerId ?? undefined, sessionId)).id;
   } else {
     conversationId = (await createConversation(customerId ?? undefined)).id;
   }

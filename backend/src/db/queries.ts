@@ -54,8 +54,11 @@ export async function getCustomerByName(name: string): Promise<CustomerRow | nul
   return data as unknown as CustomerRow | null;
 }
 
-export async function createConversation(customerId?: string): Promise<ConversationRow> {
-  const payload = customerId ? { customer_id: customerId } : {};
+export async function createConversation(customerId?: string, id?: string): Promise<ConversationRow> {
+  const payload = {
+    ...(id ? { id } : {}),
+    ...(customerId ? { customer_id: customerId } : {}),
+  };
   const { data, error } = await supabase
     .from('conversations')
     .insert(payload as never)
