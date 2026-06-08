@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { validateBody, validateParams, chatMessageSchema, sessionIdParamSchema } from '../middleware/validate';
+import { validateBody, validateParams, chatMessageSchema, sessionIdParamSchema, customerIdParamSchema } from '../middleware/validate';
 import { resolveCustomerIdentity } from '../middleware/identity';
-import { handleChatMessage, getChatHistory, deleteSession } from '../services/chat.service';
+import { handleChatMessage, getChatHistory, deleteSession, getCustomerSessions } from '../services/chat.service';
 
 const router = Router();
 
@@ -15,6 +15,19 @@ router.post(
       req.log.log('chat.receive', { sessionId, messageLen: message?.length ?? 0 });
       const result = await handleChatMessage(message, sessionId, req.activeCustomer ?? null, req.log);
       res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+router.get(
+  '/customer/:customerId/sessions',
+  validateParams(customerIdParamSchema),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const sessions = await getCustomerSessions(req.params.customerId);
+      res.json(sessions);
     } catch (err) {
       next(err);
     }

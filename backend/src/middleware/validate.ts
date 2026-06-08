@@ -37,6 +37,10 @@ export const sessionIdParamSchema = z.object({
   sessionId: z.string().uuid('Invalid session ID'),
 });
 
+export const customerIdParamSchema = z.object({
+  customerId: z.string().uuid('Invalid customer ID'),
+});
+
 export function validateParams<T>(schema: ZodSchema<T>) {
   return (req: Request, res: Response, next: NextFunction): void => {
     const result = schema.safeParse(req.params);

@@ -15,7 +15,7 @@ A customer support chat widget for Marqet, a fictional Indian e-commerce marketp
 
 - Answers questions about Marqet products, pricing, and policies using FAQ chunks embedded in pgvector + per-session conversation memory
 - Shows live order status cards that update in real time without a page refresh (Supabase Realtime WebSocket)
-- Supports multiple independent chat sessions per customer — switch between them, delete old ones, history survives reload
+- Supports multiple independent chat sessions per customer — switch between them, delete old ones, history persists in Supabase and is fully recovered in any browser or incognito window
 - Recognises natural order queries like "my orders", "what did I buy", and "show my purchases"
 - Lets you browse as any of 5 demo customers (Priya, Arjun, Sneha, Divya, Karan); the AI knows who it's talking to and won't leak another customer's data
 - Blocks identity spoofing: if someone types "my name is Priya" mid-session as a different customer, the AI rejects the claim
@@ -231,6 +231,28 @@ Fetch the full message history for a session.
 ]
 ```
 
+### GET /chat/customer/:customerId/sessions
+
+Return all sessions for a customer as a `SessionMeta[]` array, ordered by most-recently-active first. Each entry includes the session ID, a 60-character preview of the first user message, and ISO timestamps for `createdAt` and `updatedAt`.
+
+**Sample response:**
+```json
+[
+  {
+    "id": "e705b534-7b31-4189-a8a8-39fb7035d061",
+    "firstMessage": "When was Spur founded",
+    "createdAt": "2026-06-07T01:26:20.000Z",
+    "updatedAt": "2026-06-07T01:46:36.000Z"
+  },
+  {
+    "id": "bbc5eb7a-7860-4823-bc1f-c880b3ddfa55",
+    "firstMessage": "what are the policies of the company?",
+    "createdAt": "2026-06-06T20:12:05.000Z",
+    "updatedAt": "2026-06-06T20:14:07.000Z"
+  }
+]
+```
+
 ### DELETE /chat/:sessionId
 
 Delete a session and cascade through its messages and embeddings.
@@ -290,10 +312,11 @@ Full detail in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## Sessions
 
-No login required. Each session is a UUID stored in localStorage, scoped per customer so switching customers doesn't mix up history.
+No login required. Sessions are persisted in Supabase and recovered from the server on every load, so history is available in any browser, incognito window, or device — not just the one where the conversation started.
 
 - Hit **+** in the header to start a fresh session (no DB row until the first message)
-- The session list icon shows all past sessions with a preview of the first message
+- On load or customer switch, the session list is fetched from `GET /chat/customer/:id/sessions` and synced to localStorage; if the backend is unreachable, localStorage is used as a fallback
+- The most recent session is auto-resumed when no prior active session is recorded in the current browser
 - Deleting a session cascades through messages and their embeddings on the backend
 - RAG memory is scoped to the active session, so two conversations about different topics don't bleed into each other
 

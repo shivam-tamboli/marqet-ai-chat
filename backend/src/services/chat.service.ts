@@ -6,7 +6,9 @@ import {
   getOrderByNumber,
   getOrdersByCustomerId,
   deleteConversation,
+  getConversationsByCustomerId,
 } from '../db/queries';
+import type { SessionMeta } from '../types';
 import { generateReply } from './llm.service';
 import { storeMessageEmbedding } from './rag.service';
 import { log, logError, noopLogger, RequestLogger } from '../lib/logger';
@@ -269,4 +271,8 @@ export async function deleteSession(sessionId: string): Promise<boolean> {
   if (!conversation) return false;
   await deleteConversation(sessionId);
   return true;
+}
+
+export async function getCustomerSessions(customerId: string): Promise<SessionMeta[]> {
+  return getConversationsByCustomerId(customerId);
 }

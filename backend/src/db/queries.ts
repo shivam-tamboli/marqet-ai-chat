@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import type { Database, OrderStatus } from '../types/database';
 import { DBError } from '../types';
+import type { SessionMeta } from '../types';
 import { logError } from '../lib/logger';
 
 type ConversationRow = Database['public']['Tables']['conversations']['Row'];
@@ -192,6 +193,56 @@ export async function deleteConversation(conversationId: string): Promise<void> 
     .delete()
     .eq('id', conversationId);
   if (convErr) dbError('deleteConversation.conversations', convErr);
+}
+
+export async function getConversationsByCustomerId(customerId: string): Promise<SessionMeta[]> {
+  const { data: convs, error: convErr } = await supabase
+    .from('conversations')
+    .select('id, created_at')
+    .eq('customer_id', customerId)
+    .order('created_at', { ascending: false });
+  if (convErr) dbError('getConversationsByCustomerId.conversations', convErr);
+
+  const rows = (convs ?? []) as { id: string; created_at: string }[];
+  if (rows.length === 0) return [];
+
+  const ids = rows.map((c) => c.id);
+
+  const { data: msgs, error: msgErr } = await supabase
+    .from('messages')
+    .select('conversation_id, sender, text, timestamp')
+    .in('conversation_id', ids)
+    .order('timestamp', { ascending: true });
+  if (msgErr) dbError('getConversationsByCustomerId.messages', msgErr);
+
+  type MsgRow = { conversation_id: string; sender: string; text: string; timestamp: string };
+  const msgList = (msgs ?? []) as MsgRow[];
+
+  // Build per-conversation summary in a single pass (messages are already ASC)
+  const meta = new Map<string, { firstMessage: string; updatedAt: string }>();
+  for (const m of msgList) {
+    const entry = meta.get(m.conversation_id);
+    if (!entry) {
+      meta.set(m.conversation_id, {
+        firstMessage: m.sender === 'user' ? m.text.slice(0, 60) : '',
+        updatedAt: m.timestamp,
+      });
+    } else {
+      entry.updatedAt = m.timestamp; // later messages overwrite; last one wins
+      if (!entry.firstMessage && m.sender === 'user') {
+        entry.firstMessage = m.text.slice(0, 60);
+      }
+    }
+  }
+
+  return rows
+    .map((c) => ({
+      id: c.id,
+      firstMessage: meta.get(c.id)?.firstMessage ?? '',
+      createdAt: c.created_at,
+      updatedAt: meta.get(c.id)?.updatedAt ?? c.created_at,
+    }))
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
 export async function saveMessageEmbedding(

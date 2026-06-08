@@ -1,4 +1,4 @@
-import type { Message, CardPayload } from '../types';
+import type { Message, SessionMeta, CardPayload } from '../types';
 
 const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 
@@ -36,4 +36,10 @@ export async function getHistory(sessionId: string): Promise<Message[]> {
 
 export async function deleteSession(sessionId: string): Promise<void> {
   await fetch(`${BASE}/chat/${sessionId}`, { method: 'DELETE' });
+}
+
+export async function getCustomerSessions(customerId: string): Promise<SessionMeta[]> {
+  const res = await fetch(`${BASE}/chat/customer/${customerId}/sessions`);
+  if (!res.ok) return [];
+  return res.json();
 }

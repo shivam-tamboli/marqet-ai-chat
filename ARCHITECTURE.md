@@ -79,7 +79,7 @@ Middleware
 └── cors()           — allows all localhost:* in dev, env var in prod
 
 Routes
-├── chat.routes.ts  — POST /chat/message, GET /chat/:id/messages, DELETE /chat/:id
+├── chat.routes.ts  — POST /chat/message, GET /chat/customer/:id/sessions, GET /chat/:id/messages, DELETE /chat/:id
 └── order.routes.ts — GET /orders/:num, POST /orders/:num/advance
 
 Services
@@ -220,12 +220,39 @@ sequenceDiagram
 
 ---
 
-## 8. Data Flow: Page Reload / History Restore
+## 8. Data Flow: Page Load / Session Discovery
 
-1. `chatStore.initStore()` reads `marqet_active_session_<customerId>` from localStorage
-2. If found: `GET /chat/:sessionId/messages` → backend returns full message list including `card_payloads`
-3. Messages rendered in `MessageList`; multi-card messages show all cards (restored from `card_payloads` DB column)
-4. If no session ID found: empty chat state, no DB round-trip
+Sessions are backed by Supabase and recovered server-side on every load, so history is available in any browser or incognito window without a separate auth layer.
+
+**On `chatStore.initStore()` (app mount) and `switchCustomer()` (customer switch):**
+
+1. Call `GET /chat/customer/:customerId/sessions` → backend queries `conversations WHERE customer_id = :id` + joins first user message and MAX(message timestamp) per conversation in two SQL queries → returns `SessionMeta[]` sorted by `updatedAt DESC`
+2. Sync the returned list to `marqet_sessions_<customerId>` in localStorage (cache for offline fallback)
+3. If the backend is unreachable, fall back to the localStorage cache
+4. Resolve the session to resume:
+   - If `marqet_active_session_<customerId>` is set and the session exists in the server list → restore it
+   - If no stored active session but sessions exist → auto-resume the most recent one (sessions[0])
+   - If no sessions → show empty chat, wait for first message
+5. `GET /chat/:sessionId/messages` → render full thread including all order cards (restored from `card_payloads` DB column)
+
+```mermaid
+sequenceDiagram
+    participant FE as Frontend
+    participant BE as Backend
+    participant DB as Supabase
+
+    FE->>BE: GET /chat/customer/:customerId/sessions
+    BE->>DB: SELECT conversations WHERE customer_id
+    DB-->>BE: conversation rows
+    BE->>DB: SELECT messages WHERE conversation_id IN (...)
+    DB-->>BE: message rows
+    BE-->>FE: SessionMeta[] (sorted by updatedAt)
+    FE->>BE: GET /chat/:sessionId/messages
+    BE->>DB: SELECT messages WHERE conversation_id
+    DB-->>BE: message rows
+    BE-->>FE: Message[]
+    FE-->>FE: render thread
+```
 
 ---
 
@@ -291,7 +318,7 @@ marqet-ai-chat/
 │   │   │   ├── order.service.ts      ← order lookup + status advance
 │   │   │   └── llm.service.ts        ← generateReply(), system prompt builder
 │   │   ├── routes/
-│   │   │   ├── chat.routes.ts        ← POST /chat/message, GET/DELETE /chat/:id
+│   │   │   ├── chat.routes.ts        ← POST /chat/message, GET /chat/customer/:id/sessions, GET/DELETE /chat/:id
 │   │   │   └── order.routes.ts       ← GET + POST /orders/:num
 │   │   ├── middleware/
 │   │   │   ├── adminAuth.ts          ← DEMO_ADMIN_KEY guard on /orders/:num/advance
@@ -389,8 +416,9 @@ marqet-ai-chat/
 | RAG strategy | Dual stores: faq + message history | FAQ for knowledge, message embeddings for conversational long-term memory |
 | Order tracking | Mock Supabase orders + Realtime | Demonstrates real-time without needing any external payment API |
 | Card payload | `card_payload` + `card_payloads` on messages | `card_payload` for lightweight single-card queries; `card_payloads` for full multi-card restore |
-| Session identity | UUID in localStorage | No auth required per assignment; survives page refresh |
-| Per-customer localStorage keys | `marqet_sessions_<uuid>` / `marqet_active_session_<uuid>` | Each of 5 demo customers gets isolated session storage without auth; keyed by UUID |
+| Session identity | UUID in localStorage + Supabase | Sessions survive page refresh and are recovered from the server in any browser without auth |
+| Per-customer localStorage keys | `marqet_sessions_<uuid>` / `marqet_active_session_<uuid>` | Each of 5 demo customers gets isolated session storage; keys keyed by UUID, synced from server on every load |
+| Session list source of truth | Supabase (`conversations` + `messages`) | `GET /chat/customer/:id/sessions` reconstructs `SessionMeta[]` server-side; localStorage is a write-through cache and offline fallback |
 | LLM context cap | Last 20 messages passed in | Keeps token cost controlled; documented assumption |
 | RAG context cap | Top-3 chunks from each store | 6 chunks max per prompt; balances context richness vs. token cost |
 | Message embedding | Stored async after reply | Does not block the response; fire-and-forget for future RAG recall |
@@ -408,7 +436,7 @@ marqet-ai-chat/
 4. pgvector extension is pre-enabled on Supabase (it is, via the dashboard).
 5. Both backend and frontend are separate Render Web Services (not one service with static file serving).
 6. CORS on the backend is set to the Render frontend URL via env var `CORS_ORIGIN`; all `localhost:*` origins are allowed in dev mode.
-7. Session IDs are stored in localStorage under customer-scoped keys: `marqet_active_session_<customerId>`.
+7. The session list is fetched from `GET /chat/customer/:customerId/sessions` on every app mount and customer switch. localStorage holds a write-through cache used as an offline fallback. The active session UUID is stored under `marqet_active_session_<customerId>`; if absent, the most recent server session is auto-resumed.
 8. History cap: last 20 messages are sent to OpenAI as conversation context.
 9. Input validation: empty → 400; over 2000 chars → 400 with descriptive message.
 10. Order statuses advance linearly: `Paid → Packed → Shipped → Delivered`.
@@ -422,23 +450,35 @@ marqet-ai-chat/
 
 ## 14. Multi-Session Support
 
-Users maintain multiple independent conversation sessions without auth. Sessions are device-local and stored in `localStorage`. Each of the 5 demo customers has fully isolated storage so switching customers never bleeds history between them.
+Users maintain multiple independent conversation sessions without auth. Session metadata is stored in Supabase and recovered server-side on every load, so history is available in any browser, incognito window, or device. localStorage is used as a write-through cache and offline fallback — not as the source of truth.
 
 **localStorage schema:**
 
 | Key | Value |
 |---|---|
-| `marqet_sessions_<customerId>` | `SessionMeta[]` — `{ id, firstMessage, createdAt, updatedAt }` |
+| `marqet_sessions_<customerId>` | `SessionMeta[]` — `{ id, firstMessage, createdAt, updatedAt }` — synced from server on load |
 | `marqet_active_session_<customerId>` | UUID of the currently active session for that customer |
 | `marqet_active_customer` | Customer UUID (e.g. `'8768f042-f13b-43bb-8d9d-01843a520a2d'`) — defaults to Priya Sharma |
 | `marqet_bubble_corner` | `'tl' \| 'tr' \| 'bl' \| 'br'` — last snapped corner for floating bubble |
 
 **Session lifecycle:**
-1. On mount, `chatStore.initStore()` reads the current customer's active session key and fetches history via `GET /chat/:sessionId/messages`.
-2. On "New Session", the customer's active session key is cleared. No DB row is created until the first message is sent.
-3. After the first reply in a new session, the returned `sessionId` is saved under `marqet_active_session_<customerId>` and a new entry is prepended to `marqet_sessions_<customerId>`.
-4. On customer switch, `switchCustomer(customerId)` loads that customer's sessions from their own localStorage keys and restores their last active conversation.
-5. The `SessionSwitcher` panel lists all sessions by first-message preview. Clicking a session restores the full thread including all order cards.
+
+1. On mount, `chatStore.initStore()` calls `GET /chat/customer/:customerId/sessions`. The server reconstructs `SessionMeta[]` from `conversations` + `messages` in two queries (no extra columns on `conversations` needed). The list is sorted by `updatedAt DESC` and written back to localStorage.
+2. The active session is resolved: stored `activeId` if it still exists in the server list, otherwise the most recent session (sessions[0]); otherwise empty chat.
+3. If the server is unreachable, localStorage is used as a fallback so the app stays usable offline.
+4. On "New Session", the customer's active session key is cleared. No DB row is created until the first message is sent.
+5. After the first reply in a new session, the backend-assigned `sessionId` is saved to `marqet_active_session_<customerId>` and a new entry is prepended to `marqet_sessions_<customerId>`.
+6. On customer switch, `switchCustomer(customerId)` repeats steps 1–3 for the new customer. This is why picking a customer in a brand-new browser immediately loads their session list and most recent conversation.
+7. The `SessionSwitcher` panel lists all sessions by first-message preview. Clicking a session restores the full thread including all order cards.
+
+**How `SessionMeta` is reconstructed from the DB** (no extra schema required):
+
+| `SessionMeta` field | Source |
+|---|---|
+| `id` | `conversations.id` |
+| `createdAt` | `conversations.created_at` |
+| `firstMessage` | `messages WHERE sender='user' ORDER BY timestamp ASC LIMIT 1` per conversation → `.slice(0,60)` |
+| `updatedAt` | `MAX(messages.timestamp)` per conversation; falls back to `created_at` if no messages |
 
 **RAG isolation guarantee:**
 

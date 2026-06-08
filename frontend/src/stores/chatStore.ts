@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Message, SessionMeta } from '../types';
-import { sendMessage, getHistory, deleteSession as apiDeleteSession } from '../api/chat';
+import { sendMessage, getHistory, deleteSession as apiDeleteSession, getCustomerSessions } from '../api/chat';
 import { useCustomerStore } from './customerStore';
 import { sessionsKey, activeSessionKey } from '../lib/storage';
 
@@ -45,12 +45,31 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   initStore: async () => {
     const { id: customerId } = useCustomerStore.getState().customer;
-    const sessions = loadSessions(customerId);
-    const activeId = localStorage.getItem(activeSessionKey(customerId));
+
+    // Server is source of truth for the session list; localStorage is the fallback
+    const serverSessions = await getCustomerSessions(customerId).catch(() => null);
+    const sessions = serverSessions ?? loadSessions(customerId);
+    if (serverSessions) saveSessions(customerId, serverSessions);
+
+    const storedActiveId = localStorage.getItem(activeSessionKey(customerId));
+    // Use the stored active session if it still exists; otherwise auto-resume the most
+    // recent session so opening in a new browser picks up where the user left off.
+    const activeId =
+      storedActiveId && sessions.some((s) => s.id === storedActiveId)
+        ? storedActiveId
+        : sessions.length > 0
+        ? sessions[0].id
+        : null;
+
     if (!activeId) {
       set({ sessions });
       return;
     }
+
+    if (activeId !== storedActiveId) {
+      localStorage.setItem(activeSessionKey(customerId), activeId);
+    }
+
     set({ sessions, sessionId: activeId });
     const history = await getHistory(activeId).catch(() => []);
     if (history.length > 0) set({ messages: history });
@@ -141,18 +160,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ messages: history });
   },
 
-  // Load sessions and last active session for the given customer.
-  // Called by UserSwitcher after updating customerStore so per-customer
-  // history is restored immediately on switch.
+  // Load sessions and restore the active conversation for the given customer.
+  // Called by UserSwitcher. Fetches the session list from the server so switching
+  // to a customer in any browser immediately shows their full history.
   switchCustomer: async (customerId: string) => {
-    const sessions = loadSessions(customerId);
-    const activeId = localStorage.getItem(activeSessionKey(customerId));
+    const serverSessions = await getCustomerSessions(customerId).catch(() => null);
+    const sessions = serverSessions ?? loadSessions(customerId);
+    if (serverSessions) saveSessions(customerId, serverSessions);
+
+    const storedActiveId = localStorage.getItem(activeSessionKey(customerId));
+    const activeId =
+      storedActiveId && sessions.some((s) => s.id === storedActiveId)
+        ? storedActiveId
+        : sessions.length > 0
+        ? sessions[0].id
+        : null;
+
     set({ sessions, messages: [], sessionId: null, error: null, showSessionPanel: false });
-    if (activeId) {
-      set({ sessionId: activeId });
-      const history = await getHistory(activeId).catch(() => []);
-      if (history.length > 0) set({ messages: history });
+
+    if (!activeId) return;
+
+    if (activeId !== storedActiveId) {
+      localStorage.setItem(activeSessionKey(customerId), activeId);
     }
+
+    set({ sessionId: activeId });
+    const history = await getHistory(activeId).catch(() => []);
+    if (history.length > 0) set({ messages: history });
   },
 
   newSession: () => {

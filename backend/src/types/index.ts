@@ -44,3 +44,10 @@ export interface CardPayload {
   customer_name: string;
   items: unknown[];
 }
+
+export interface SessionMeta {
+  id: string;
+  firstMessage: string;
+  createdAt: string;
+  updatedAt: string;
+}
